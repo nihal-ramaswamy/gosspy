@@ -1,64 +1,62 @@
 package org.gosspy.db;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
+/**
+ * Manages the connection to db.
+ */
 @Slf4j
 public class ConnectionManager {
-    private static Connection getConnection(String url) throws SQLException {
-        return DriverManager.getConnection(url);
+    /**
+     * Singleton instance
+     */
+    @Getter
+    private static Connection connection = null;
+
+    /**
+     * Private constructor to make class singleton.
+     */
+    private ConnectionManager() {
+
     }
 
-    public void insertIntoSnowflakeWhereNodeIdIs(String url, int nodeId) throws SQLException {
-        String sql = "INSERT INTO SNOWFLAKE_COUNTER(NODE_ID, COUNTER) VALUES (?, ?)";
-        Connection connection = ConnectionManager.getConnection(url);
-        var statement = connection.prepareStatement(sql);
-        statement.setInt(1, nodeId);
-        statement.setInt(2, 0);
-        statement.executeUpdate();
-        statement.close();
-        connection.close();
-    }
-
-    public void incrementCounter(String url, int nodeId) throws SQLException {
-        String sql = "UPDATE SNOWFLAKE_COUNTER SET COUNTER = COUNTER + 1 WHERE NODE_ID = ?";
-        Connection connection = ConnectionManager.getConnection(url);
-        var statement = connection.prepareStatement(sql);
-        statement.setInt(1, nodeId);
-        statement.executeUpdate();
-        statement.close();
-    }
-
-    public Integer selectCounter(String url, int nodeId) throws SQLException {
-        String sql = "SELECT COUNTER FROM SNOWFLAKE_COUNTER WHERE NODE_ID = ?";
-        Connection connection = ConnectionManager.getConnection(url);
-        var statement = connection.prepareStatement(sql);
-        statement.setInt(1, nodeId);
-        var resultSet = statement.executeQuery();
-
-        int answer = 0;
-        while (resultSet.next()) {
-            answer = resultSet.getInt("COUNTER");
+    /**
+     * Initializes the connection with given url. This should be called only once and in the beginning of the program.
+     * Make sure to close the connection before exiting the program.
+     *
+     * @param url {@link String} URL to the db
+     * @throws SQLException if there is an error in the connection
+     * @throws RuntimeException if init is called more than once
+     */
+    public static void init(String url) throws SQLException, RuntimeException {
+        if (connection != null) {
+            throw new RuntimeException("Connection already instantiated");
         }
-
-        resultSet.close();
-        statement.close();
-
-        return answer;
+        connection = DriverManager.getConnection(url);
     }
 
-    public boolean nodeExists(String url, int nodeId) throws SQLException {
-        String sql = "SELECT * FROM SNOWFLAKE_COUNTER WHERE NODE_ID = ?";
-        Connection connection = ConnectionManager.getConnection(url);
-        var statement = connection.prepareStatement(sql);
-        statement.setInt(1, nodeId);
-        var resultSet = statement.executeQuery();
-        boolean answer = resultSet.next();
-        resultSet.close();
-        statement.close();
-        return answer;
+    /**
+     * Returns the instance of connection.
+     */
+    public static Connection getInstance() {
+        return connection;
+    }
+
+    /**
+     * Closes the connection. To be called at the end of the program.
+     */
+    public static void close()  {
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+               log.error("Error closing sql connection: {}", e.getMessage());
+            }
+        }
     }
 }

@@ -1,22 +1,32 @@
 package org.gosspy.utils;
 
-import org.gosspy.db.ConnectionManager;
+import org.gosspy.db.DatabaseManager;
 
 import java.sql.SQLException;
 
+/**
+ * Class to generate snowflake id.
+ */
 public class SnowflakeIdGenerator {
+    /**
+     * Generates snowflake id.
+     * It also increments the counter for that node in the database. If node does not exist, it adds it with a counter of 0.
+     *
+     * @param url {@link String} database url
+     * @param workerId {@link Integer} node id
+     */
     public static Long getId(String url, Integer workerId) throws SQLException {
-        ConnectionManager connectionManager = new ConnectionManager();
-        boolean exists = connectionManager.nodeExists(url, workerId);
+        DatabaseManager databaseManager = DatabaseManager.getInstance();
+        boolean exists = databaseManager.nodeExists(url, workerId);
         if (!exists) {
-            connectionManager.insertIntoSnowflakeWhereNodeIdIs(url, workerId);
+            databaseManager.insertIntoSnowflakeWhereNodeIdIs(url, workerId);
         } else {
-            connectionManager.incrementCounter(url, workerId);
+            databaseManager.incrementCounter(url, workerId);
         }
 
         long timestamp = System.currentTimeMillis();
         Long machineId = Long.valueOf(workerId);
-        Long sequence = Long.valueOf(connectionManager.selectCounter(url, workerId));
+        Long sequence = Long.valueOf(databaseManager.selectCounter(url, workerId));
 
         return timestamp << 22 | machineId << 16 | sequence;
     }

@@ -8,8 +8,8 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.gosspy.config.GosspyConfig;
 import org.gosspy.constants.Constants;
+import org.gosspy.db.ConnectionManager;
 import org.gosspy.heartbeat.Heartbeat;
-import org.gosspy.utils.SnowflakeIdGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -40,7 +40,7 @@ public class Gosspy {
         thread.setName("heartbeat");
         thread.start();
 
-        log.info(SnowflakeIdGenerator.getId(gosspyConfig.snowflake().database(), 10).toString());
+        ConnectionManager.init(gosspyConfig.snowflake().database());
     }
 
     /**
@@ -50,6 +50,7 @@ public class Gosspy {
         try {
             new Gosspy().run();
         } catch (Exception e) {
+            ConnectionManager.close();
             log.error(e.getMessage());
         }
     }
