@@ -4,17 +4,10 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.gosspy.heartbeat.Heartbeat;
 
 /**
  * Used to store data from {@link org.gosspy.constants.Constants.APPLICATION_YAML_FILE}.
  */
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@ToString
-public class GosspyConfig {
-    /**
-     * Stores heartbeat configuration.
-     */
-    private HeartbeatConfig heartbeat;
+public record GosspyConfig(HeartbeatConfig heartbeat, NodesConfig nodes, SnowflakeConfig snowflake) {
 }

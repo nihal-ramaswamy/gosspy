@@ -9,17 +9,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.gosspy.config.GosspyConfig;
 import org.gosspy.constants.Constants;
 import org.gosspy.heartbeat.Heartbeat;
+import org.gosspy.utils.SnowflakeIdGenerator;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URL;
+import java.sql.SQLException;
 
 @Slf4j
 public class Gosspy {
     /**
      * Main function which sets up gosspy.
      */
-    public void run() throws IOException {
+    public void run() throws IOException, SQLException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.findAndRegisterModules();
         URL fileUrl = getClass().getClassLoader().getResource(Constants.APPLICATION_YAML_FILE);
@@ -32,12 +34,13 @@ public class Gosspy {
 
         Thread thread = new Thread(() -> {
             Heartbeat heartbeat = new Heartbeat();
-            heartbeat.start(gosspyConfig.getHeartbeat().getAddress(), gosspyConfig.getHeartbeat().getInterval());
+            heartbeat.start(gosspyConfig.heartbeat().address(), gosspyConfig.heartbeat().interval());
         });
 
         thread.setName("heartbeat");
         thread.start();
 
+        log.info(SnowflakeIdGenerator.getId(gosspyConfig.snowflake().database(), 10).toString());
     }
 
     /**

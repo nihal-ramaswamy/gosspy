@@ -6,9 +6,11 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.net.URI;
+import java.util.List;
 
 /**
- * Heartbeat configuration.
+ * Stores metadata of nodes.
  */
-public record HeartbeatConfig(URI address, Long interval) {
+public record NodesConfig(Integer writes, Integer reads, List<URI> servers, CurrentConfig current) {
+
 }
