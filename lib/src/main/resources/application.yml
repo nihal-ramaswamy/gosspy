@@ -1,0 +1,3 @@
+heartbeat:
+    interval: 3000
+    address: http://localhost:6969/ping
