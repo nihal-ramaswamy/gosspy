@@ -3,7 +3,7 @@ package org.gosspy.gossiper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.gosspy.config.GosspyConfig;
-import org.gosspy.db.RequestsDb;
+import org.gosspy.db.RequestsHistoryDb;
 import org.gosspy.dto.Data;
 import org.gosspy.gen.protobuf.ResponseStatus;
 
@@ -17,7 +17,9 @@ public class RpcDataHandler<K, T> implements RpcDataHandlerAbstract<K, T> {
 
     private final Data<K, T> data;
     private final GosspyConfig gosspyConfig;
-    private final static RequestsDb requestsDb = RequestsDb.getInstance();
+
+    private static final RequestsHistoryDb requestsDb = RequestsHistoryDb.getInstance();
+
 
     @Override
     public Optional<T> getData(K key, Long id) {

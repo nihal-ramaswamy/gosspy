@@ -11,15 +11,15 @@ import java.sql.SQLException;
  * Stores information of requests.
  */
 @Slf4j
-public class RequestsDb {
+public class RequestsHistoryDb {
 
     @Getter
-    private static final RequestsDb instance = new RequestsDb();
+    private static final RequestsHistoryDb instance = new RequestsHistoryDb();
 
     /**
      * Private constructor to make class singleton.
      */
-    private RequestsDb() {
+    private RequestsHistoryDb() {
     }
 
 

@@ -14,12 +14,13 @@ import org.gosspy.gen.protobuf.RpcGossipHandlerGrpc;
 import org.gosspy.utils.Miscellaneous;
 
 import java.net.URI;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
+// TODO: Find a better way instead of suppressing warnings.
 @AllArgsConstructor
+@SuppressWarnings("unchecked")
 public class RpcNetworkHandler<K, T> extends RpcGossipHandlerGrpc.RpcGossipHandlerImplBase {
 
     private final Data<K, T> dataHandler;
@@ -40,35 +41,35 @@ public class RpcNetworkHandler<K, T> extends RpcGossipHandlerGrpc.RpcGossipHandl
         Long id = request.getId();
         K key = (K) request.getKey();
 
-        int count = request.getCount();
-        Optional<T> data = this.rpcDataHandler.getData(key, id);
 
-        if (data.isPresent()) {
-            count++;
+        AtomicInteger count = new AtomicInteger(request.getCount());
+        AtomicReference<Optional<T>> data = new AtomicReference<>(this.rpcDataHandler.getData(key, id));
+
+        if (data.get().isPresent()) {
+            count.incrementAndGet();
         }
 
-        for (var server : Miscellaneous.copyShuffle(gosspyConfig.nodes().servers())) {
-            if (count >= gosspyConfig.nodes().reads()) {
-                break;
+        Miscellaneous.copyShuffle(gosspyConfig.nodes().servers()).parallelStream().forEach((server) -> {
+            if (count.get() >= gosspyConfig.nodes().reads()) {
+                return;
             }
 
             GossipResponse response = sendGrpcRequest(request, server);
-            if (response.getStatus() != ResponseStatus.ACCEPTED) {
-                continue;
+
+            if (response.getStatus() == ResponseStatus.ACCEPTED) {
+                if (data.get().isPresent() && response.hasData()) {
+                    data.set(Optional.of(this.dataHandler.getLatestVersion(data.get().get(), (T) response.getData())));
+                }
+
+                if (data.get().isEmpty()) {
+                    data.set(Optional.of((T) response.getData()));
+                }
+                count.incrementAndGet();
             }
 
-            if (data.isPresent() && response.hasData()) {
-                data = Optional.of(this.dataHandler.getLatestVersion(data.get(), (T) response.getData()));
-            }
+        });
 
-            if (data.isEmpty()) {
-                data = Optional.of((T) response.getData());
-            }
-
-            count++;
-        }
-
-        if (data.isEmpty() || count < gosspyConfig.nodes().reads()) {
+        if (data.get().isEmpty() || count.get() < gosspyConfig.nodes().reads()) {
             responseObserver.onNext(GossipResponse.newBuilder()
                     .setId(request.getId())
                     .setStatus(ResponseStatus.REJECTED)
@@ -79,11 +80,10 @@ public class RpcNetworkHandler<K, T> extends RpcGossipHandlerGrpc.RpcGossipHandl
 
         responseObserver.onNext(GossipResponse.newBuilder()
                 .setId(request.getId())
-                .setData((Any) data.get())
+                .setData((Any) data.get().get())
                 .setStatus(ResponseStatus.ACCEPTED)
                 .build());
         responseObserver.onCompleted();
-        return;
     }
 
     @Override
@@ -91,24 +91,23 @@ public class RpcNetworkHandler<K, T> extends RpcGossipHandlerGrpc.RpcGossipHandl
         Long id = request.getId();
         K key = (K) request.getKey();
         T data = (T) request.getData();
-        int count = 0;
+        AtomicInteger count = new AtomicInteger(0);
 
         if (this.rpcDataHandler.setData(key, data, id)) {
-            count++;
+            count.incrementAndGet();
         }
 
-        for (var server : Miscellaneous.copyShuffle(gosspyConfig.nodes().servers())) {
-            if (count >= gosspyConfig.nodes().writes()) {
-                break;
+        Miscellaneous.copyShuffle(gosspyConfig.nodes().servers()).parallelStream().forEach((server) -> {
+            if (count.get() >= gosspyConfig.nodes().writes()) {
+                return;
             }
             GossipResponse response = sendGrpcRequest(request, server);
-            if (response.getStatus() != ResponseStatus.ACCEPTED) {
-                continue;
+            if (response.getStatus() == ResponseStatus.ACCEPTED) {
+                count.incrementAndGet();
             }
-            count++;
-        }
+        });
 
-        ResponseStatus status = count >= gosspyConfig.nodes().writes() ? ResponseStatus.ACCEPTED : ResponseStatus.REJECTED;
+        ResponseStatus status = count.get() >= gosspyConfig.nodes().writes() ? ResponseStatus.ACCEPTED : ResponseStatus.REJECTED;
         responseObserver.onNext(GossipResponse.newBuilder()
                 .setId(request.getId())
                 .setStatus(status)
