@@ -10,5 +10,6 @@ nodes:
         - http://localhost:1236
     current:
         id: 1
+        address: http://localhost:1234
 snowflake:
     database: jdbc:sqlite:snowflake.db

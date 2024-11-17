@@ -7,31 +7,30 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * Manages database operations.
+ * Manages database operations for snowflake db.
  */
 @Slf4j
-public class DatabaseManager {
+public class SnowflakeDb {
     /**
      * Singleton instance.
      */
     @Getter
-    private static final DatabaseManager instance = new DatabaseManager();
+    private static final SnowflakeDb instance = new SnowflakeDb();
 
     /**
      * Private constructor to make class singleton.
      */
-    private DatabaseManager() {
+    private SnowflakeDb() {
 
     }
 
     /**
      * Insert Node id, Counter into the database. Counter is set to 0.
      *
-     * @param url    {@link String} url to the db
      * @param nodeId {@link int} node id
      * @throws SQLException Any exception when executing the query.
      */
-    public void insertIntoSnowflakeWhereNodeIdIs(String url, int nodeId) throws SQLException {
+    public void insertIntoSnowflakeWhereNodeIdIs(int nodeId) throws SQLException {
         Connection connection = ConnectionManager.getInstance();
 
         String sql = "INSERT INTO SNOWFLAKE_COUNTER(NODE_ID, COUNTER) VALUES (?, ?)";
@@ -44,11 +43,12 @@ public class DatabaseManager {
 
     /**
      * Increments the counter for the node id.
-     * TODO: add a check to see if node exists.
+     * TODO: add a check to see if node exists
+     *
+     * @param nodeId {@link int} node id
      * @throws SQLException Any exception when executing the query.
-     * @param url {@link String} url to the db
      */
-    public void incrementCounter(String url, int nodeId) throws SQLException {
+    public void incrementCounter(int nodeId) throws SQLException {
         Connection connection = ConnectionManager.getInstance();
         String sql = "UPDATE SNOWFLAKE_COUNTER SET COUNTER = COUNTER + 1 WHERE NODE_ID = ?";
         var statement = connection.prepareStatement(sql);
@@ -61,11 +61,10 @@ public class DatabaseManager {
     /**
      * Returns counter for the node id.
      *
-     * @param url    {@link String} url to the db
      * @param nodeId {@link int} node id
      * @throws SQLException Any exception when executing the query.
      */
-    public Integer selectCounter(String url, int nodeId) throws SQLException {
+    public Integer selectCounter(int nodeId) throws SQLException {
         int answer = 0;
         Connection connection = ConnectionManager.getInstance();
         String sql = "SELECT COUNTER FROM SNOWFLAKE_COUNTER WHERE NODE_ID = ?";
@@ -87,11 +86,10 @@ public class DatabaseManager {
     /**
      * Checks if node-counter exists in the database.
      *
-     * @param url    {@link String} url to the db
      * @param nodeId {@link int} node id
      * @throws SQLException Any exception when executing the query.
      */
-    public boolean nodeExists(String url, int nodeId) throws SQLException {
+    public boolean nodeExists(int nodeId) throws SQLException {
         boolean answer;
 
         Connection connection = ConnectionManager.getInstance();

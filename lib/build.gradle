@@ -8,6 +8,8 @@
 plugins {
     // Apply the java-library plugin for API and implementation separation.
     id 'java-library'
+    id 'com.google.protobuf' version '0.9.4'
+
 }
 
 repositories {
@@ -33,15 +35,43 @@ dependencies {
 	testCompileOnly 'org.projectlombok:lombok:1.18.36'
 	testAnnotationProcessor 'org.projectlombok:lombok:1.18.36'
 
+    // Logger stuff
     implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
     implementation group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.16'
 
+    // XML stuff
     implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.18.1'
     implementation group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-yaml', version: '2.18.1'
     implementation group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: '2.18.1'
+
+    // JSON stuff
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.7'
+
+    // SQLite driver
     implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.47.0.0'
 
+    implementation "io.grpc:grpc-protobuf:1.68.1"
+    implementation "io.grpc:grpc-services:1.68.1"
+    implementation "io.grpc:grpc-stub:1.68.1"
+    compileOnly "org.apache.tomcat:annotations-api:6.0.53"
+
+    // examples/advanced need this for JsonFormat
+    implementation "com.google.protobuf:protobuf-java-util:3.25.5"
+
+    runtimeOnly "io.grpc:grpc-netty-shaded:1.68.1"
+
+
+
+}
+
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:3.25.5" }
+    plugins {
+        grpc { artifact = "io.grpc:protoc-gen-grpc-java:1.68.1" }
+    }
+    generateProtoTasks {
+        all()*.plugins { grpc {} }
+    }
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
@@ -55,3 +85,4 @@ tasks.named('test') {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
 }
+

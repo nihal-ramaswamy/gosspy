@@ -1,6 +1,6 @@
 package org.gosspy.utils;
 
-import org.gosspy.db.DatabaseManager;
+import org.gosspy.db.SnowflakeDb;
 
 import java.sql.SQLException;
 
@@ -12,22 +12,26 @@ public class SnowflakeIdGenerator {
      * Generates snowflake id.
      * It also increments the counter for that node in the database. If node does not exist, it adds it with a counter of 0.
      *
-     * @param url {@link String} database url
      * @param workerId {@link Integer} node id
      */
-    public static Long getId(String url, Integer workerId) throws SQLException {
-        DatabaseManager databaseManager = DatabaseManager.getInstance();
-        boolean exists = databaseManager.nodeExists(url, workerId);
+    public static Long getId(Integer workerId) throws SQLException {
+        SnowflakeDb databaseManager = SnowflakeDb.getInstance();
+        boolean exists = databaseManager.nodeExists(workerId);
         if (!exists) {
-            databaseManager.insertIntoSnowflakeWhereNodeIdIs(url, workerId);
+            databaseManager.insertIntoSnowflakeWhereNodeIdIs(workerId);
         } else {
-            databaseManager.incrementCounter(url, workerId);
+            databaseManager.incrementCounter(workerId);
         }
 
-        long timestamp = System.currentTimeMillis();
-        Long machineId = Long.valueOf(workerId);
-        Long sequence = Long.valueOf(databaseManager.selectCounter(url, workerId));
+        long timestamp = System.currentTimeMillis(); // 41 bits
+        timestamp %= (1L << 41);
 
-        return timestamp << 22 | machineId << 16 | sequence;
+        Long machineId = Long.valueOf(workerId); // 12 bits
+        machineId %= (1L << 12);
+
+        Long sequence = Long.valueOf(databaseManager.selectCounter(workerId)); // 10 bits
+        sequence %= (1L << 10); // 1024
+
+        return timestamp | machineId| sequence;
     }
 }
