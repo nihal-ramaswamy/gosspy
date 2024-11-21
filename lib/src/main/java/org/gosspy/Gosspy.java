@@ -40,7 +40,7 @@ public class Gosspy {
         }
         GosspyConfig gosspyConfig = mapper.readValue(fileUrl, GosspyConfig.class);
 
-        log.info(gosspyConfig.toString());
+        log.atInfo().addKeyValue("gosspyConfig", gosspyConfig).log();
 
         Thread thread = new Thread(() -> {
             Heartbeat heartbeat = new Heartbeat();
@@ -61,7 +61,9 @@ public class Gosspy {
                 .addService(networkHandler)
                 .addService(health.getHealthService())
                 .build().start();
-        log.info("Server listening at: {}", currentAddress.getPort());
+
+        log.atInfo().addKeyValue("port", currentAddress.getPort()).log("Server listening");
+
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -78,6 +80,7 @@ public class Gosspy {
                     }
                 } catch (InterruptedException ex) {
                     server.shutdownNow();
+                    log.atInfo().log("Shutting down server");
                 }
             }
         });
@@ -93,7 +96,7 @@ public class Gosspy {
             new Gosspy().run();
         } catch (Exception e) {
             ConnectionManager.close();
-            log.error(e.getMessage());
+            log.atError().addKeyValue("message", e.getMessage()).log();
         }
     }
 }

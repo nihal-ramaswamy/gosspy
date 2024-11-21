@@ -47,7 +47,7 @@ public class Heartbeat {
     private static void heartbeat(URI uri) {
         try (HttpClient httpClient = HttpClient.newHttpClient()) {
             try {
-                log.info("Sending heartbeat...");
+                log.atInfo().log("Sending heartbeat");
 
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(uri)
@@ -57,14 +57,14 @@ public class Heartbeat {
 
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != HttpURLConnection.HTTP_OK) {
-                    log.info("Heartbeat status failed with code: {}", response.statusCode());
+                    log.atInfo().addKeyValue("code", response.statusCode()).log("Heartbeat failed");
                 }
 
             } catch (Exception e) {
-                log.error("Error sending heartbeat: {}", e.getMessage());
+                log.atError().addKeyValue("message", e.getMessage()).addKeyValue("status", "SENDING").log();
             }
         } catch (Exception e) {
-            log.error("Error starting heartbeat: {}", e.getMessage());
+                log.atError().addKeyValue("message", e.getMessage()).addKeyValue("status", "STARTING").log();
         }
     }
 

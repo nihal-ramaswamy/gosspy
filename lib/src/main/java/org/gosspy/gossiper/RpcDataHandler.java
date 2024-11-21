@@ -28,7 +28,7 @@ public class RpcDataHandler<K, T> implements RpcDataHandlerAbstract<K, T> {
                 return Optional.empty();
             }
         } catch (SQLException e) {
-            log.error("Error in RPCDataHandler::getData: {}", e.getMessage());
+            log.atError().addKeyValue("message", e.getMessage()).log();
         }
 
         return Optional.of(this.data.getData(key));
@@ -41,7 +41,7 @@ public class RpcDataHandler<K, T> implements RpcDataHandlerAbstract<K, T> {
                 return true;
             }
         } catch (SQLException e) {
-            log.error("Error in RPCDataHandler::setData: {}", e.getMessage());
+            log.atError().addKeyValue("message", e.getMessage()).log();
         }
 
         return this.data.setData(key, data);

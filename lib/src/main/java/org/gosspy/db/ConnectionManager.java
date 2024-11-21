@@ -55,7 +55,7 @@ public class ConnectionManager {
             try {
                 connection.close();
             } catch (SQLException e) {
-               log.error("Error closing sql connection: {}", e.getMessage());
+                log.atError().addKeyValue("message", e.getMessage()).log();
             }
         }
     }
