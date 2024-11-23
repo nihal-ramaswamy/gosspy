@@ -34,7 +34,9 @@ public class ConnectionManager {
      * @throws RuntimeException if init is called more than once
      */
     public static void init(String url) throws SQLException, RuntimeException {
+        log.atInfo().addKeyValue("url", url).log("Initializing sql connection.");
         if (connection != null) {
+            log.atError().log("Connection already created.");
             throw new RuntimeException("Connection already instantiated");
         }
         connection = DriverManager.getConnection(url);
@@ -51,6 +53,7 @@ public class ConnectionManager {
      * Closes the connection. To be called at the end of the program.
      */
     public static void close()  {
+        log.atInfo().log("Closing sql connection.");
         if (connection != null) {
             try {
                 connection.close();

@@ -31,6 +31,7 @@ public class SnowflakeDb {
      * @throws SQLException Any exception when executing the query.
      */
     public void insertIntoSnowflakeWhereNodeIdIs(int nodeId) throws SQLException {
+        log.atInfo().addKeyValue("nodeId", nodeId).addKeyValue("counter", 0).log("Adding row to SNOWFLAKE_COUNTER");
         Connection connection = ConnectionManager.getInstance();
 
         String sql = "INSERT INTO SNOWFLAKE_COUNTER(NODE_ID, COUNTER) VALUES (?, ?)";
@@ -49,6 +50,7 @@ public class SnowflakeDb {
      * @throws SQLException Any exception when executing the query.
      */
     public void incrementCounter(int nodeId) throws SQLException {
+        log.atInfo().addKeyValue("nodeId", nodeId).log("Incrementing counter in SNOWFLAKE_COUNTER.");
         Connection connection = ConnectionManager.getInstance();
         String sql = "UPDATE SNOWFLAKE_COUNTER SET COUNTER = COUNTER + 1 WHERE NODE_ID = ?";
         var statement = connection.prepareStatement(sql);
@@ -65,6 +67,8 @@ public class SnowflakeDb {
      * @throws SQLException Any exception when executing the query.
      */
     public Integer selectCounter(int nodeId) throws SQLException {
+        log.atInfo().addKeyValue("nodeId", nodeId).log("Fetching counter value in SNOWFLAKE_COUNTER.");
+
         int answer = 0;
         Connection connection = ConnectionManager.getInstance();
         String sql = "SELECT COUNTER FROM SNOWFLAKE_COUNTER WHERE NODE_ID = ?";
@@ -90,6 +94,8 @@ public class SnowflakeDb {
      * @throws SQLException Any exception when executing the query.
      */
     public boolean nodeExists(int nodeId) throws SQLException {
+        log.atInfo().addKeyValue("nodeId", nodeId).log("Checking if entry exists for node in SNOWFLAKE_COUNTER.");
+
         boolean answer;
 
         Connection connection = ConnectionManager.getInstance();

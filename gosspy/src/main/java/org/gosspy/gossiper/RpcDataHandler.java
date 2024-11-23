@@ -13,16 +13,16 @@ import java.util.Optional;
 
 @AllArgsConstructor
 @Slf4j
-public class RpcDataHandler<K, T> implements RpcDataHandlerAbstract<K, T> {
+public class RpcDataHandler implements RpcDataHandlerAbstract {
 
-    private final Data<K, T> data;
+    private final Data data;
     private final GosspyConfig gosspyConfig;
 
     private static final RequestsHistoryDb requestsDb = RequestsHistoryDb.getInstance();
 
 
     @Override
-    public Optional<T> getData(K key, Long id) {
+    public Optional<String> getData(String key, Long id) {
         try {
             if (RpcDataHandler.requestsDb.getRequestStatus(id, gosspyConfig.nodes().current().id()) == ResponseStatus.DUPLICATE) {
                 return Optional.empty();
@@ -31,15 +31,27 @@ public class RpcDataHandler<K, T> implements RpcDataHandlerAbstract<K, T> {
             log.atError().addKeyValue("message", e.getMessage()).log();
         }
 
+        try {
+            RpcDataHandler.requestsDb.upsertIntoRequests(id, gosspyConfig.nodes().current().id(), ResponseStatus.ACCEPTED);
+        } catch (SQLException e) {
+            log.atError().addKeyValue("message", e.getMessage()).log();
+        }
+
         return Optional.of(this.data.getData(key));
     }
 
     @Override
-    public boolean setData(K key, T data, Long id) {
+    public boolean setData(String key, String data, Long id) {
         try {
             if (RpcDataHandler.requestsDb.getRequestStatus(id, gosspyConfig.nodes().current().id()) == ResponseStatus.ACCEPTED) {
                 return true;
             }
+        } catch (SQLException e) {
+            log.atError().addKeyValue("message", e.getMessage()).log();
+        }
+
+        try {
+            RpcDataHandler.requestsDb.upsertIntoRequests(id, gosspyConfig.nodes().current().id(), ResponseStatus.ACCEPTED);
         } catch (SQLException e) {
             log.atError().addKeyValue("message", e.getMessage()).log();
         }

@@ -2,16 +2,16 @@ package org.gosspy.dto;
 
 /**
  * Represents an abstract base class which holds the data to send through the gossip protocol.
- * K = key, T = data type
+ * Key = string, Type = string
  */
-public interface Data<K, T> {
+public interface Data {
 
  /**
   * Gets key from the object.
   *
   * @param data the data for which the key is required
   */
- K getKey(T data);
+ String getKey(String data);
 
  /**
   * Gets the data assosciated with the given key.
@@ -19,7 +19,7 @@ public interface Data<K, T> {
   * @param key the key to fetch data for
   * @return The value assosciated with the given key.
   */
- T getData(K key);
+ String getData(String key);
 
  /**
   * Sets the data assosciated with the given key.
@@ -28,7 +28,7 @@ public interface Data<K, T> {
   * @param data the data to set.
   * @return Whether or not the set was successful.
   */
- boolean setData(K key, T data);
+ boolean setData(String key, String data);
 
  /**
   * Compares the two data and checks which one of them is newer.
@@ -36,5 +36,5 @@ public interface Data<K, T> {
   * @param data1 the first data to compare
   * @param data2 the second data to compare
   */
- T getLatestVersion(T data1, T data2);
+ String getLatestVersion(String data1, String data2);
 }

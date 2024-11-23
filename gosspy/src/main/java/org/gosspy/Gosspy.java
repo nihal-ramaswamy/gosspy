@@ -5,17 +5,16 @@ package org.gosspy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import io.grpc.Grpc;
-import io.grpc.InsecureServerCredentials;
 import io.grpc.Server;
+import io.grpc.ServerBuilder;
 import io.grpc.health.v1.HealthCheckResponse;
 import io.grpc.protobuf.services.HealthStatusManager;
+import io.grpc.protobuf.services.ProtoReflectionServiceV1;
 import lombok.extern.slf4j.Slf4j;
 import org.gosspy.config.GosspyConfig;
 import org.gosspy.constants.Constants;
 import org.gosspy.db.ConnectionManager;
 import org.gosspy.dto.Data;
-import org.gosspy.dto.DataImpl;
 import org.gosspy.gossiper.RpcDataHandler;
 import org.gosspy.gossiper.RpcNetworkHandler;
 import org.gosspy.heartbeat.Heartbeat;
@@ -32,7 +31,7 @@ public class Gosspy {
     /**
      * Main function which sets up gosspy.
      */
-    public <K, T, D extends Data<K, T>> void run(D data) throws IOException, SQLException, InterruptedException {
+    public void run(Data data) throws IOException, SQLException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.findAndRegisterModules();
         URL fileUrl = getClass().getClassLoader().getResource(Constants.APPLICATION_YAML_FILE);
@@ -51,41 +50,43 @@ public class Gosspy {
         thread.setName("heartbeat");
         thread.start();
 
+        log.atInfo().addKeyValue("databaseUrl", gosspyConfig.snowflake().database()).log("Connecting to database");
         ConnectionManager.init(gosspyConfig.snowflake().database());
+        log.atInfo().addKeyValue("connectionClosed", ConnectionManager.getConnection().getClientInfo()).log("testing connection");
 
         URI currentAddress = gosspyConfig.nodes().current().address();
 
-        RpcDataHandler<K, T> rpcDataHandler = new RpcDataHandler<>(data, gosspyConfig);
-        RpcNetworkHandler<K, T> networkHandler = new RpcNetworkHandler<>(data, rpcDataHandler, gosspyConfig);
+        RpcDataHandler rpcDataHandler = new RpcDataHandler(data, gosspyConfig);
+        RpcNetworkHandler networkHandler = new RpcNetworkHandler(data, rpcDataHandler, gosspyConfig);
         HealthStatusManager health = new HealthStatusManager();
-        final Server server = Grpc.newServerBuilderForPort(currentAddress.getPort(), InsecureServerCredentials.create())
+
+        // TODO: Make this secure
+        final Server server = ServerBuilder.forPort(currentAddress.getPort())
                 .addService(networkHandler)
                 .addService(health.getHealthService())
+                .addService(ProtoReflectionServiceV1.newInstance())
                 .build().start();
 
         log.atInfo().addKeyValue("port", currentAddress.getPort()).log("Server listening");
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Start graceful shutdown
-                server.shutdown();
-                try {
-                    // Wait for RPCs to complete processing
-                    if (!server.awaitTermination(30, TimeUnit.SECONDS)) {
-                        // That was plenty of time. Let's cancel the remaining RPCs
-                        server.shutdownNow();
-                        // shutdownNow isn't instantaneous, so give a bit of time to clean resources up
-                        // gracefully. Normally this will be well under a second.
-                        server.awaitTermination(5, TimeUnit.SECONDS);
-                    }
-                } catch (InterruptedException ex) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Start graceful shutdown
+            server.shutdown();
+            try {
+                // Wait for RPCs to complete processing
+                if (!server.awaitTermination(30, TimeUnit.SECONDS)) {
+                    // That was plenty of time. Let's cancel the remaining RPCs
                     server.shutdownNow();
-                    log.atInfo().log("Shutting down server");
+                    // shutdownNow isn't instantaneous, so give a bit of time to clean resources up
+                    // gracefully. Normally this will be well under a second.
+                    server.awaitTermination(5, TimeUnit.SECONDS);
                 }
+            } catch (InterruptedException ex) {
+                ConnectionManager.close();
+                server.shutdownNow();
+                log.atInfo().log("Shutting down server");
             }
-        });
+        }));
         health.setStatus("", HealthCheckResponse.ServingStatus.SERVING);
-        server.awaitTermination();
     }
 }

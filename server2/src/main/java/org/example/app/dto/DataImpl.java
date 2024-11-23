@@ -7,14 +7,11 @@ import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DataImpl implements Data<Integer, DataImpl.DataValue> {
-
-    public record DataValue(Integer value, Timestamp timestamp) {
-    }
-    Map<Integer, DataValue> map = new HashMap<>();
+public class DataImpl implements Data {
+    Map<String, String> map = new HashMap<>();
 
     @Override
-    public Integer getKey(DataValue data) {
+    public String getKey(String data) {
         return
         this.map.keySet()
         .stream()
@@ -24,25 +21,18 @@ public class DataImpl implements Data<Integer, DataImpl.DataValue> {
     }
 
     @Override
-    public DataValue getData(Integer key) {
+    public String getData(String key) {
         return this.map.get(key);
     }
 
     @Override
-    public boolean setData(Integer key, DataValue data) {
+    public boolean setData(String key, String data) {
         this.map.put(key, data);
         return true;
     }
 
     @Override
-    public DataValue getLatestVersion(DataValue data1, DataValue data2) {
-        if (data1 == data2) {
-            return data1;
-        }
-        if (data1.timestamp().after(data2.timestamp())) {
-            return data1;
-        } else {
-            return data2;
-        }
+    public String getLatestVersion(String data1, String data2) {
+        return data1;
     }
 }

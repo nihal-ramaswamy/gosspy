@@ -33,6 +33,8 @@ public class RequestsHistoryDb {
      * @throws SQLException Any exception during database operation.
      */
     public void upsertIntoRequests(Long id, Integer nodeId, ResponseStatus status) throws SQLException {
+        log.atInfo().addKeyValue("id", id).addKeyValue("nodeId", nodeId).addKeyValue("status", status).log("Upsert into REQUESTS_DB.");
+
         String sql = "INSERT INTO REQUESTS_DB(ID, NODE_ID, STATUS) VALUES(?, ?, ?) ON CONFLICT(ID, NODE_ID) DO UPDATE SET STATUS = ? WHERE ID = ? AND NODE_ID = ?";
         Connection connection = ConnectionManager.getInstance();
 
@@ -59,6 +61,7 @@ public class RequestsHistoryDb {
      * @throws SQLException Any exception during database operation.
      */
     public ResponseStatus getRequestStatus(Long id, Integer nodeId) throws SQLException {
+        log.atInfo().addKeyValue("id", id).addKeyValue("nodeId", nodeId).log("Getting request status from REQUESTS_DB.");
         String sql = "SELECT STATUS FROM REQUESTS_DB WHERE ID = ? AND NODE_ID = ?";
 
         Connection connection = ConnectionManager.getInstance();
