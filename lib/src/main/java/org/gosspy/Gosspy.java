@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.gosspy.config.GosspyConfig;
 import org.gosspy.constants.Constants;
 import org.gosspy.db.ConnectionManager;
+import org.gosspy.dto.Data;
 import org.gosspy.dto.DataImpl;
 import org.gosspy.gossiper.RpcDataHandler;
 import org.gosspy.gossiper.RpcNetworkHandler;
@@ -31,7 +32,7 @@ public class Gosspy {
     /**
      * Main function which sets up gosspy.
      */
-    public void run() throws IOException, SQLException, InterruptedException {
+    public <K, T, D extends Data<K, T>> void run(D data) throws IOException, SQLException, InterruptedException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
         mapper.findAndRegisterModules();
         URL fileUrl = getClass().getClassLoader().getResource(Constants.APPLICATION_YAML_FILE);
@@ -53,9 +54,9 @@ public class Gosspy {
         ConnectionManager.init(gosspyConfig.snowflake().database());
 
         URI currentAddress = gosspyConfig.nodes().current().address();
-        DataImpl data = new DataImpl();
-        RpcDataHandler<Integer, DataImpl.DataValue> rpcDataHandler = new RpcDataHandler<>(data, gosspyConfig);
-        RpcNetworkHandler<Integer, DataImpl.DataValue> networkHandler = new RpcNetworkHandler<>(data, rpcDataHandler, gosspyConfig);
+
+        RpcDataHandler<K, T> rpcDataHandler = new RpcDataHandler<>(data, gosspyConfig);
+        RpcNetworkHandler<K, T> networkHandler = new RpcNetworkHandler<>(data, rpcDataHandler, gosspyConfig);
         HealthStatusManager health = new HealthStatusManager();
         final Server server = Grpc.newServerBuilderForPort(currentAddress.getPort(), InsecureServerCredentials.create())
                 .addService(networkHandler)
@@ -86,17 +87,5 @@ public class Gosspy {
         });
         health.setStatus("", HealthCheckResponse.ServingStatus.SERVING);
         server.awaitTermination();
-    }
-
-    /**
-     * Used for testing
-     */
-    public static void main(String[] args) {
-        try {
-            new Gosspy().run();
-        } catch (Exception e) {
-            ConnectionManager.close();
-            log.atError().addKeyValue("message", e.getMessage()).log();
-        }
     }
 }
