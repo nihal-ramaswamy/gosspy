@@ -11,4 +11,4 @@ plugins {
 }
 
 rootProject.name = 'gosspy'
-include('lib')
+include('gosspy', 'server1', 'server2', 'server3')

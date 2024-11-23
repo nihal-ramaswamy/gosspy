@@ -1,0 +1,15 @@
+heartbeat:
+    interval: 3000
+    address: http://localhost:6969/ping
+nodes:
+    reads: 2
+    writes: 2
+    servers:
+        - http://localhost:1234
+        - http://localhost:1235
+        - http://localhost:1236
+    current:
+        id: 3
+        address: http://localhost:1236
+snowflake:
+    database: jdbc:sqlite:snowflake.db
