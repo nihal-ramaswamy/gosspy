@@ -41,7 +41,7 @@ public class RpcDataHandler implements RpcDataHandlerAbstract {
     }
 
     @Override
-    public boolean setData(String key, String data, Long id) {
+    public Boolean setData(String key, String data, Long id) {
         try {
             if (RpcDataHandler.requestsDb.getRequestStatus(id, gosspyConfig.nodes().current().id()) == ResponseStatus.ACCEPTED) {
                 return true;

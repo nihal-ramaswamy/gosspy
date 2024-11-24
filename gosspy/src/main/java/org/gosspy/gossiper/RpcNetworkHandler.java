@@ -16,8 +16,9 @@ import org.gosspy.utils.Miscellaneous;
 
 import java.net.URI;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 @AllArgsConstructor
@@ -39,12 +40,20 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
     private GossipResponse sendGrpcRequestSetData(GossipRequest request, URI uri) {
         ManagedChannel channel = ManagedChannelBuilder.forAddress(uri.getHost(), uri.getPort()).usePlaintext().build();
         RpcGossipHandlerGrpc.RpcGossipHandlerBlockingStub stub = RpcGossipHandlerGrpc.newBlockingStub(channel);
-        GossipResponse response = stub.getData(request);
+        GossipResponse response = stub.setData(request);
         channel.shutdown();
         return response;
     }
 
-    private static boolean checkIfResponseAccepted(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
+    /**
+     * Checks if there is an entry for the message id and node with a status of {@code ResponseStatus.ACCEPTED}
+     *
+     * @param messageId        {@link Long} the message id
+     * @param currentNodeId    {@link Integer} the node id
+     * @param responseObserver {@link StreamObserver<GossipResponse>} used to handle the grpc request
+     * @return {@link Boolean} {@code true} if entry exists, else {@code false}
+     */
+    private static Boolean checkIfResponseAccepted(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
 
         try {
@@ -64,6 +73,14 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         return false;
     }
 
+    /**
+     * Checks if there is an entry for the message id and node with a status of {@code ResponseStatus.PROCESSING}
+     *
+     * @param messageId        {@link Long} the message id
+     * @param currentNodeId    {@link Integer} the node id
+     * @param responseObserver {@link StreamObserver<GossipResponse>} used to handle the grpc request
+     * @return {@link Boolean} {@code true} if entry exists, else {@code false}
+     */
     private static boolean checkIfResponseProcessing(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
 
@@ -85,11 +102,19 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         return false;
     }
 
-    private static boolean updateStatusToProcessingIfChecksPassed(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
+    /**
+     * If both {@link RpcNetworkHandler::checkIfResponseProcessing} and {@link RpcNetworkHandler::checkIfResponseAccepted} both return false, it will upsert into REQUESTS_DB.
+     *
+     * @param messageId        {@link Long} the message id
+     * @param currentNodeId    {@link Integer} the node id
+     * @param responseObserver {@link StreamObserver<GossipResponse>} used to handle the grpc request
+     * @return {@link Boolean} {@code false} if entry was upserted, else {@code true}
+     */
+    private static Boolean updateStatusToProcessingIfChecksPassed(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
 
         if (RpcNetworkHandler.checkIfResponseProcessing(messageId, currentNodeId, responseObserver) ||
-            RpcNetworkHandler.checkIfResponseAccepted(messageId, currentNodeId, responseObserver)) {
+                RpcNetworkHandler.checkIfResponseAccepted(messageId, currentNodeId, responseObserver)) {
             return true;
         }
 
@@ -104,39 +129,51 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
     }
 
 
-
+    /**
+     * Fetches data by querying other nodes along with itself. If
+     */
     @Override
     public void getData(GossipRequest request, StreamObserver<GossipResponse> responseObserver) {
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
         Integer currentNode = gosspyConfig.nodes().current().id();
+        Long id = request.getId();
+        String key = request.getKey();
 
         if (RpcNetworkHandler.updateStatusToProcessingIfChecksPassed(request.getId(), currentNode, responseObserver)) {
             return;
         }
 
-        Long id = request.getId();
-        String key = request.getKey();
-
-
-        AtomicInteger count = new AtomicInteger(request.getCount());
+        AtomicReference<List<String>> serversQueried = new AtomicReference<>(request.getServersList());
         AtomicReference<Optional<String>> data = new AtomicReference<>(this.rpcDataHandler.getData(key, id));
 
         if (data.get().isPresent()) {
-            count.incrementAndGet();
+            String currentNodeUriString = gosspyConfig.nodes().current().address().toString();
+            if (!Miscellaneous.isElementInAtomicReferenceArray(serversQueried, currentNodeUriString)) {
+                serversQueried.get().add(currentNodeUriString);
+            }
         }
 
         // Query other nodes in random order.
         Miscellaneous.copyShuffle(gosspyConfig.nodes().servers()).parallelStream().forEach((server) -> {
-            if (count.get() >= gosspyConfig.nodes().reads()) {
+            if (serversQueried.get().size() >= gosspyConfig.nodes().reads() ||
+                Miscellaneous.isElementInAtomicReferenceArray(serversQueried, server.toString())) {
                 return;
             }
 
-            if (server.equals(gosspyConfig.nodes().current().address())) {
-                return;
+            GossipRequest.Builder newGossipRequestBuilder = GossipRequest.newBuilder()
+                .setId(request.getId())
+            .setKey(request.getKey())
+            .setData(request.getData());
+
+            int idx = 0;
+            for (String servers: serversQueried.get()) {
+                newGossipRequestBuilder.setServers(idx, servers);
+                idx++;
             }
+
 
             log.atInfo().addKeyValue("host", server).addKeyValue("key", request.getKey()).log("Sending getData request from getData");
-            GossipResponse response = sendGrpcRequestGetData(request, server);
+            GossipResponse response = sendGrpcRequestGetData(newGossipRequestBuilder.build(), server);
 
             if (response.getStatus() == ResponseStatus.ACCEPTED) {
                 if (data.get().isPresent() && response.hasData()) {
@@ -146,12 +183,12 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
                 if (data.get().isEmpty()) {
                     data.set(Optional.of(response.getData()));
                 }
-                count.incrementAndGet();
+                serversQueried.get().add(server.toString());
             }
         });
 
         // If data is empty or not enough nodes read, return reject
-        if (data.get().isEmpty() || count.get() < gosspyConfig.nodes().reads()) {
+        if (data.get().isEmpty() || serversQueried.get().size() < gosspyConfig.nodes().reads()) {
             responseObserver.onNext(GossipResponse.newBuilder()
                     .setId(request.getId())
                     .setStatus(ResponseStatus.REJECTED)
@@ -178,9 +215,8 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         try {
             requestsHistoryDb.upsertIntoRequests(request.getId(), currentNode, ResponseStatus.ACCEPTED);
         } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error updating status to accepted");
+            log.atError().addKeyValue("message", e.getMessage()).addKeyValue("status", ResponseStatus.ACCEPTED).log("Error updating status");
         }
-
     }
 
     @Override
@@ -188,7 +224,6 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         long id = request.getId();
         String key = request.getKey();
         String data = request.getData();
-        AtomicInteger count = new AtomicInteger(0);
         Integer currentNode = gosspyConfig.nodes().current().id();
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
 
@@ -196,31 +231,43 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
             return;
         }
 
+        AtomicReference<List<String>> serversQueried = new AtomicReference<>(new ArrayList<>(request.getServersList()));
+
+
         // Set data for itself
         if (this.rpcDataHandler.setData(key, data, id)) {
-            count.incrementAndGet();
+            String currentNodeUriString = gosspyConfig.nodes().current().address().toString();
+            if (!Miscellaneous.isElementInAtomicReferenceArray(serversQueried, currentNodeUriString)) {
+                serversQueried.get().add(currentNodeUriString);
+            }
         }
 
         // Send data to other nodes until minimum count has reached.
         Miscellaneous.copyShuffle(gosspyConfig.nodes().servers()).parallelStream().forEach((server) -> {
-            if (count.get() >= gosspyConfig.nodes().writes()) {
+            if (serversQueried.get().size() >= gosspyConfig.nodes().writes() ||
+                Miscellaneous.isElementInAtomicReferenceArray(serversQueried, server.toString())) {
                 return;
             }
 
-            if (server.equals(gosspyConfig.nodes().current().address())) {
-                return;
-            }
+            GossipRequest.Builder newGossipRequestBuilder = GossipRequest.newBuilder()
+                .setId(request.getId())
+            .setKey(request.getKey())
+            .setData(request.getData());
+
+
+            newGossipRequestBuilder.addAllServers(serversQueried.get());
 
             log.atInfo().addKeyValue("host", server).addKeyValue("key", request.getKey()).log("Sending getData request from setData");
 
-            GossipResponse response = sendGrpcRequestSetData(request, server);
+            GossipResponse response = sendGrpcRequestSetData(newGossipRequestBuilder.build(), server);
+
             if (response.getStatus() == ResponseStatus.ACCEPTED) {
-                count.incrementAndGet();
+                serversQueried.get().add(server.toString());
             }
         });
 
 
-        ResponseStatus status = count.get() >= gosspyConfig.nodes().writes() ? ResponseStatus.ACCEPTED : ResponseStatus.REJECTED;
+        ResponseStatus status = serversQueried.get().size() >= gosspyConfig.nodes().writes() ? ResponseStatus.ACCEPTED : ResponseStatus.REJECTED;
         responseObserver.onNext(GossipResponse.newBuilder()
                 .setId(request.getId())
                 .setStatus(status)
