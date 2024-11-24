@@ -28,7 +28,7 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
     private final RpcDataHandler rpcDataHandler;
     private final GosspyConfig gosspyConfig;
 
-    private GossipResponse sendGrpcRequest(GossipRequest request, URI uri) {
+    private GossipResponse sendGrpcRequestGetData(GossipRequest request, URI uri) {
         ManagedChannel channel = ManagedChannelBuilder.forAddress(uri.getHost(), uri.getPort()).usePlaintext().build();
         RpcGossipHandlerGrpc.RpcGossipHandlerBlockingStub stub = RpcGossipHandlerGrpc.newBlockingStub(channel);
         GossipResponse response = stub.getData(request);
@@ -36,47 +36,82 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         return response;
     }
 
+    private GossipResponse sendGrpcRequestSetData(GossipRequest request, URI uri) {
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(uri.getHost(), uri.getPort()).usePlaintext().build();
+        RpcGossipHandlerGrpc.RpcGossipHandlerBlockingStub stub = RpcGossipHandlerGrpc.newBlockingStub(channel);
+        GossipResponse response = stub.getData(request);
+        channel.shutdown();
+        return response;
+    }
+
+    private static boolean checkIfResponseAccepted(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
+        RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
+
+        try {
+            if (requestsHistoryDb.getRequestStatus(messageId, currentNodeId) == ResponseStatus.ACCEPTED) {
+                log.atDebug().addKeyValue("id", messageId).addKeyValue("nodeId", currentNodeId).log("Request id already processed.");
+                responseObserver.onNext(GossipResponse.newBuilder()
+                        .setId(messageId)
+                        .setStatus(ResponseStatus.ACCEPTED)
+                        .build());
+                responseObserver.onCompleted();
+                return true;
+            }
+        } catch (SQLException e) {
+            log.atError().addKeyValue("message", e.getMessage()).log("Error getting data.");
+        }
+
+        return false;
+    }
+
+    private static boolean checkIfResponseProcessing(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
+        RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
+
+        // If request sent again before node finishes processing, reject it.
+        try {
+            if (requestsHistoryDb.getRequestStatus(messageId, currentNodeId) == ResponseStatus.PROCESSING) {
+                log.atDebug().addKeyValue("id", messageId).addKeyValue("nodeId", currentNodeId).log("Got duplicate request while still processing.");
+                responseObserver.onNext(GossipResponse.newBuilder()
+                        .setId(messageId)
+                        .setStatus(ResponseStatus.PROCESSING)
+                        .build());
+                responseObserver.onCompleted();
+                return true;
+            }
+        } catch (SQLException e) {
+            log.atError().addKeyValue("message", e.getMessage()).log("Error getting data");
+        }
+
+        return false;
+    }
+
+    private static boolean updateStatusToProcessingIfChecksPassed(Long messageId, Integer currentNodeId, StreamObserver<GossipResponse> responseObserver) {
+        RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
+
+        if (RpcNetworkHandler.checkIfResponseProcessing(messageId, currentNodeId, responseObserver) ||
+            RpcNetworkHandler.checkIfResponseAccepted(messageId, currentNodeId, responseObserver)) {
+            return true;
+        }
+
+        // Update db to status processing
+        try {
+            requestsHistoryDb.upsertIntoRequests(messageId, currentNodeId, ResponseStatus.PROCESSING);
+        } catch (SQLException e) {
+            log.atError().addKeyValue("message", e.getMessage()).log("Error updating status to processing");
+        }
+
+        return false;
+    }
+
+
 
     @Override
     public void getData(GossipRequest request, StreamObserver<GossipResponse> responseObserver) {
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
         Integer currentNode = gosspyConfig.nodes().current().id();
 
-        // If request sent again before node finishes processing, reject it.
-        try {
-            if (requestsHistoryDb.getRequestStatus(request.getId(), currentNode) == ResponseStatus.PROCESSING) {
-                log.atDebug().addKeyValue("id", request.getId()).addKeyValue("nodeId", currentNode).log("Got duplicate request while still processing.");
-                responseObserver.onNext(GossipResponse.newBuilder()
-                        .setId(request.getId())
-                        .setStatus(ResponseStatus.PROCESSING)
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-        } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error getting data");
-        }
-
-        // If node has already finished processing the request id, do not process again.
-        try {
-            if (requestsHistoryDb.getRequestStatus(request.getId(), currentNode) == ResponseStatus.ACCEPTED) {
-                log.atDebug().addKeyValue("id", request.getId()).addKeyValue("nodeId", currentNode).log("Request id already processed.");
-                responseObserver.onNext(GossipResponse.newBuilder()
-                        .setId(request.getId())
-                        .setStatus(ResponseStatus.ACCEPTED)
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-        } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error getting data.");
-        }
-
-        // Update db to status processing
-        try {
-            requestsHistoryDb.upsertIntoRequests(request.getId(), currentNode, ResponseStatus.PROCESSING);
-        } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error updating status to processing");
+        if (RpcNetworkHandler.updateStatusToProcessingIfChecksPassed(request.getId(), currentNode, responseObserver)) {
+            return;
         }
 
         Long id = request.getId();
@@ -101,7 +136,7 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
             }
 
             log.atInfo().addKeyValue("host", server).addKeyValue("key", request.getKey()).log("Sending getData request from getData");
-            GossipResponse response = sendGrpcRequest(request, server);
+            GossipResponse response = sendGrpcRequestGetData(request, server);
 
             if (response.getStatus() == ResponseStatus.ACCEPTED) {
                 if (data.get().isPresent() && response.hasData()) {
@@ -157,42 +192,8 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         Integer currentNode = gosspyConfig.nodes().current().id();
         RequestsHistoryDb requestsHistoryDb = RequestsHistoryDb.getInstance();
 
-
-        // If request sent again before node finishes processing, reject it.
-        try {
-            if (requestsHistoryDb.getRequestStatus(request.getId(), currentNode) == ResponseStatus.PROCESSING) {
-                log.atDebug().addKeyValue("id", request.getId()).addKeyValue("nodeId", currentNode).log("Got duplicate request while still processing.");
-                responseObserver.onNext(GossipResponse.newBuilder()
-                        .setId(request.getId())
-                        .setStatus(ResponseStatus.PROCESSING)
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-        } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error getting data");
-        }
-
-        // If node has already finished processing the request id, do not process again.
-        try {
-            if (requestsHistoryDb.getRequestStatus(request.getId(), currentNode) == ResponseStatus.ACCEPTED) {
-                log.atDebug().addKeyValue("id", request.getId()).addKeyValue("nodeId", currentNode).log("Request id already processed.");
-                responseObserver.onNext(GossipResponse.newBuilder()
-                        .setId(request.getId())
-                        .setStatus(ResponseStatus.ACCEPTED)
-                        .build());
-                responseObserver.onCompleted();
-                return;
-            }
-        } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error getting data.");
-        }
-
-        // Update db to status processing
-        try {
-            requestsHistoryDb.upsertIntoRequests(request.getId(), currentNode, ResponseStatus.PROCESSING);
-        } catch (SQLException e) {
-            log.atError().addKeyValue("message", e.getMessage()).log("Error updating status to processing");
+        if (RpcNetworkHandler.updateStatusToProcessingIfChecksPassed(request.getId(), currentNode, responseObserver)) {
+            return;
         }
 
         // Set data for itself
@@ -212,7 +213,7 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
 
             log.atInfo().addKeyValue("host", server).addKeyValue("key", request.getKey()).log("Sending getData request from setData");
 
-            GossipResponse response = sendGrpcRequest(request, server);
+            GossipResponse response = sendGrpcRequestSetData(request, server);
             if (response.getStatus() == ResponseStatus.ACCEPTED) {
                 count.incrementAndGet();
             }
