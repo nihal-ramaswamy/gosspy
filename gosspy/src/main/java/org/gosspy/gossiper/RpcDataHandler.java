@@ -20,7 +20,13 @@ public class RpcDataHandler implements RpcDataHandlerAbstract {
 
     private static final RequestsHistoryDb requestsDb = RequestsHistoryDb.getInstance();
 
-
+    /**
+     * Contains the logic to fetch the data from the database
+     *
+     * @param key {@link String} The key for which the data is required
+     * @param id {@link Long} The request id
+     * @return {@link Optional<String>} Returns the data if found
+     */
     @Override
     public Optional<String> getData(String key, Long id) {
         try {
@@ -40,6 +46,14 @@ public class RpcDataHandler implements RpcDataHandlerAbstract {
         return Optional.of(this.data.getData(key));
     }
 
+    /**
+     * Sets the data in the database
+     *
+     * @param key {@link String} The key for which the data is set with
+     * @param data {@link String} The data itself
+     * @param id {@link Long} The request id
+     * @return {@link Boolean} Returns true if the data is set
+     */
     @Override
     public Boolean setData(String key, String data, Long id) {
         try {

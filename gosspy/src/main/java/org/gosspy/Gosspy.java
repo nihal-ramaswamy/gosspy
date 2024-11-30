@@ -30,6 +30,8 @@ import java.util.concurrent.TimeUnit;
 public class Gosspy {
     /**
      * Main function which sets up gosspy.
+     *
+     * @param data {@link Data} The data class that is sent across the grpc protocol
      */
     public void run(Data data) throws IOException, SQLException {
         ObjectMapper mapper = new ObjectMapper(new YAMLFactory());

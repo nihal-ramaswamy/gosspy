@@ -29,6 +29,13 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
     private final RpcDataHandler rpcDataHandler;
     private final GosspyConfig gosspyConfig;
 
+    /**
+     * Send getData RPC request
+     *
+     * @param request {@link GossipRequest} Request object
+     * @param uri {@link URI} The uri to send the request to
+     * @return {@link GossipResponse} The response after sending the request
+     */
     private GossipResponse sendGrpcRequestGetData(GossipRequest request, URI uri) {
         ManagedChannel channel = ManagedChannelBuilder.forAddress(uri.getHost(), uri.getPort()).usePlaintext().build();
         RpcGossipHandlerGrpc.RpcGossipHandlerBlockingStub stub = RpcGossipHandlerGrpc.newBlockingStub(channel);
@@ -37,6 +44,13 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         return response;
     }
 
+    /**
+     * Send setData RPC request
+     *
+     * @param request {@link GossipRequest} Request object
+     * @param uri {@link URI} The uri to send the request to
+     * @return {@link GossipResponse} The response after sending the request
+     */
     private GossipResponse sendGrpcRequestSetData(GossipRequest request, URI uri) {
         ManagedChannel channel = ManagedChannelBuilder.forAddress(uri.getHost(), uri.getPort()).usePlaintext().build();
         RpcGossipHandlerGrpc.RpcGossipHandlerBlockingStub stub = RpcGossipHandlerGrpc.newBlockingStub(channel);
@@ -130,7 +144,12 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
 
 
     /**
-     * Fetches data by querying other nodes along with itself. If
+     * Fetches data by querying other nodes along with itself.
+     * It queries a minimum of {@code gosspyConfig.nodes().reads()} nodes defined from the application.yml file
+     * Returns a {@code ResponseStatus.ACCEPTED} or {@code ResponseStatus.REJECTED} based on the processing.
+     *
+     * @param request {@link GossipRequest} The request that needs to be processed
+     * @param responseObserver {@link StreamObserver<GossipResponse>} grpc response observer
      */
     @Override
     public void getData(GossipRequest request, StreamObserver<GossipResponse> responseObserver) {
@@ -219,6 +238,14 @@ public class RpcNetworkHandler extends RpcGossipHandlerGrpc.RpcGossipHandlerImpl
         }
     }
 
+    /**
+     * Sends data by querying other nodes along with itself.
+     * It queries a minimum of {@code gosspyConfig.nodes().reads()} nodes defined from the application.yml file
+     * Returns a {@code ResponseStatus.ACCEPTED} or {@code ResponseStatus.REJECTED} based on the processing.
+     *
+     * @param request {@link GossipRequest} The request that needs to be processed
+     * @param responseObserver {@link StreamObserver<GossipResponse>} grpc response observer
+     */
     @Override
     public void setData(GossipRequest request, StreamObserver<GossipResponse> responseObserver) {
         long id = request.getId();
