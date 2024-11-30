@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package gen.protobuf;
+
+option java_package = "org.gosspy.gen.protobuf";
+option java_multiple_files = true;
+
+enum ResponseStatus {
+    DUPLICATE = 0;
+    ACCEPTED = 1;
+    REJECTED = 2;
+    PROCESSING = 3;
+}
+
+message GossipRequest {
+    int64 id = 1;
+    string key = 2;
+    optional string data = 3;
+    repeated string servers = 4;
+}
+
+message GossipResponse {
+    int64 id = 1;
+    ResponseStatus status = 2;
+    optional string data = 3;
+}
+
+service RpcGossipHandler {
+    rpc GetData(GossipRequest) returns (GossipResponse) {};
+    rpc SetData(GossipRequest) returns (GossipResponse) {};
+}
